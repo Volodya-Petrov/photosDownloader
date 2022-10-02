@@ -41,35 +41,39 @@ type photo struct {
 }
 
 func DownloadPhotos(vkId, token string) error {
-	url := fmt.Sprintf("https://api.vk.com/method/users.get?"+
-		"user_ids=%v&access_token=%v&v=5.131", vkId, token)
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	usersJson := usersJson{}
-	err = json.NewDecoder(resp.Body).Decode(&usersJson)
+	realId, err := getId(vkId, token)
 	if err != nil {
 		return err
 	}
 
-	url = fmt.Sprintf(fmt.Sprintf("https://api.vk.com/method/photos.getAll?"+
-		"owner_id=%v&access_token=%v&v=5.131", usersJson.Users[0].Id, token))
-	resp, err = http.Get(url)
-	photosJson := photosJson{}
-	err = json.NewDecoder(resp.Body).Decode(&photosJson)
+	response, err := getPhotos(realId, token, 0)
+	if err != nil {
+		return err
+	}
 
+	photosCount := response.Count
 	countWorkers := runtime.NumCPU()
 	w8 := sync.WaitGroup{}
 	w8.Add(countWorkers)
-	ch := make(chan item, len(photosJson.Response.Items))
+	ch := make(chan item, len(response.Items)*3)
 
 	for i := 0; i < countWorkers; i++ {
 		go worker(ch, &w8, i)
 	}
 
-	for _, item := range photosJson.Response.Items {
-		ch <- item
+	offset := 0
+
+	for offset < photosCount {
+		response, err := getPhotos(realId, token, offset)
+		if err != nil {
+			fmt.Printf("err downloading photos: %v\n", err)
+			offset = photosCount
+			continue
+		}
+		for _, item := range response.Items {
+			ch <- item
+		}
+		offset += len(response.Items)
 	}
 
 	close(ch)
@@ -103,4 +107,34 @@ func worker(ch chan item, w8 *sync.WaitGroup, workerId int) {
 	}
 	fmt.Printf("Worker %v quit\n", workerId)
 	w8.Done()
+}
+
+func getPhotos(id uint64, token string, offset int) (response, error) {
+	url := fmt.Sprintf(fmt.Sprintf("https://api.vk.com/method/photos.getAll?"+
+		"owner_id=%v&offset=%v&access_token=%v&v=5.131", id, offset, token))
+	resp, err := http.Get(url)
+	if err != nil {
+		return response{}, err
+	}
+	photosJson := photosJson{}
+	err = json.NewDecoder(resp.Body).Decode(&photosJson)
+	if err != nil {
+		return response{}, err
+	}
+	return photosJson.Response, nil
+}
+
+func getId(vkId, token string) (uint64, error) {
+	url := fmt.Sprintf("https://api.vk.com/method/users.get?"+
+		"user_ids=%v&access_token=%v&v=5.131", vkId, token)
+	resp, err := http.Get(url)
+	if err != nil {
+		return 0, err
+	}
+	usersJson := usersJson{}
+	err = json.NewDecoder(resp.Body).Decode(&usersJson)
+	if err != nil {
+		return 0, err
+	}
+	return usersJson.Users[0].Id, nil
 }

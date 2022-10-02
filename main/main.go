@@ -1,8 +1,6 @@
 package main
 
-import (
-	"photosDownloader/downloader"
-)
+import "photosDownloader/downloader"
 
 func main() {
 	downloader.DownloadPhotos()
