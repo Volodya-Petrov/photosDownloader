@@ -51,6 +51,11 @@ func DownloadPhotos(vkId, token string) error {
 		return err
 	}
 
+	err = os.Mkdir("result", 0777)
+	if err != nil && !os.IsExist(err) {
+		return err
+	}
+
 	photosCount := response.Count
 	countWorkers := runtime.NumCPU()
 	w8 := sync.WaitGroup{}
@@ -62,7 +67,6 @@ func DownloadPhotos(vkId, token string) error {
 	}
 
 	offset := 0
-
 	for offset < photosCount {
 		response, err := getPhotos(realId, token, offset)
 		if err != nil {
@@ -85,13 +89,15 @@ func worker(ch chan item, w8 *sync.WaitGroup, workerId int) {
 	for photos := range ch {
 		fmt.Printf("Worker %v takes task\n", workerId)
 		idInStr := strconv.FormatUint(photos.Id, 10)
-		err := os.Mkdir(idInStr, 0777)
+		err := os.Mkdir("result/"+idInStr, 0777)
 		if err != nil {
 			fmt.Printf("Worker %v err: %v\n", workerId, err)
-			continue
+			if !os.IsExist(err) {
+				continue
+			}
 		}
 		for _, photo := range photos.Photos {
-			file, err := os.Create(idInStr + "/" + idInStr + photo.Size)
+			file, err := os.Create("result/" + idInStr + "/" + photo.Size)
 			if err != nil {
 				fmt.Printf("Worker %v err: %v\n", workerId, err)
 				continue
