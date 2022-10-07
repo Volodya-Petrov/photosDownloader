@@ -11,8 +11,14 @@ import (
 	"sync"
 )
 
+type errorResponse struct {
+	ErrorCode    int    `json:"error_code"`
+	ErrorMessage string `json:"error_msg"`
+}
+
 type usersJson struct {
-	Users []user `json:"response"`
+	Users []user        `json:"response"`
+	Error errorResponse `json:"error"`
 }
 
 type user struct {
@@ -22,7 +28,8 @@ type user struct {
 	CanAccessClosed bool   `json:"can_access_closed"`
 }
 type photosJson struct {
-	Response response `json:"response"`
+	Response response      `json:"response"`
+	Error    errorResponse `json:"error"`
 }
 
 type response struct {
@@ -127,6 +134,9 @@ func getPhotos(id uint64, token string, offset int) (response, error) {
 	if err != nil {
 		return response{}, err
 	}
+	if photosJson.Error.ErrorCode > 0 {
+		return response{}, fmt.Errorf("error when getting photo, owner_id:%v. Error: %v", id, photosJson.Error.ErrorMessage)
+	}
 	return photosJson.Response, nil
 }
 
@@ -141,6 +151,9 @@ func getId(vkId, token string) (uint64, error) {
 	err = json.NewDecoder(resp.Body).Decode(&usersJson)
 	if err != nil {
 		return 0, err
+	}
+	if usersJson.Error.ErrorCode > 0 {
+		return 0, fmt.Errorf("error when getting user id. Err: %v", usersJson.Error.ErrorMessage)
 	}
 	return usersJson.Users[0].Id, nil
 }
