@@ -11,7 +11,10 @@ const pathToTestData = "./testData"
 const pathToResult = "./result"
 
 func TestDownloadPhotos(t *testing.T) {
-	token := ""
+	token, ok := os.LookupEnv("TOKEN")
+	if !ok {
+		t.Fatalf("Error: access token not found")
+	}
 	vkId := "lovenaitivixod"
 
 	err := DownloadPhotos(vkId, token)
